@@ -1,0 +1,17 @@
+{application, epy_mind,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, { epy_mind_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    lib_parallel_minghu6
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, []},
+  {licenses, ["Apache 2.0"]},
+  {links, []}
+ ]}.
