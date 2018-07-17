@@ -6,7 +6,7 @@
   {applications,
    [kernel,
     stdlib,
-    lib_parallel_minghu6
+    grpcbox
    ]},
   {env,[]},
   {modules, []},
