@@ -10,7 +10,7 @@
 -compile([nowarn_export_all]).
 -compile([export_all]).
 
--include("grpcbox.hrl").
+-include_lib("grpcbox/include/grpcbox.hrl").
 
 -define(SERVICE, 'hellostreamingworld.MultiGreeter').
 -define(PROTO_MODULE, 'hellostreamingworld_pb').

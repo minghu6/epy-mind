@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#! /bin/bash
 
 rm -f ./src/protos/*_pb2*.py
 
