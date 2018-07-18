@@ -39,6 +39,8 @@ Demo
             <<"grpc-accept-encoding">> => <<"identity,deflate,gzip">>},
       trailers => #{}}}
 
+3> client:python_eval(#{exec => "def a(): return ['1', 2, 3, 4]", eval => "a()"}).
+[<<"1">>,2,3,4]
 ```
 
 py as grpc server

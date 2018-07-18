@@ -6,6 +6,7 @@
 
 from concurrent import futures
 import time
+import json
 
 import grpc
 
@@ -65,7 +66,7 @@ class MatrixOp(matrix_op_pb2_grpc.MatrixOpServicer):
 class PythonShell(python_shell_pb2_grpc.PythonShellServicer):
     def Eval(self, request, context):
         exec(request.exec)
-        result = str(eval(request.eval))
+        result = json.dumps(eval(request.eval))
 
         return python_shell_pb2.StringValue(value=result)
 

@@ -35,7 +35,8 @@ python_eval(EvalRequest) ->
     case python_shell_python_shell_client:eval(ctx:new(), EvalRequest) of
         {ok, Response, _} ->
             Bin = maps:get(value, Response),
-            binary:bin_to_list(Bin);
+            jiffy:decode(Bin);
+            % binary:bin_to_list(Bin);
         {error, Why} ->
             {error, Why}
     end.
