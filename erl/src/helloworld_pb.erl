@@ -23,25 +23,13 @@
 -export([gpb_version_as_string/0, gpb_version_as_list/0]).
 
 
-%% enumerated types
 
--export_type([]).
-
-%% message types
--type hello_request() ::
-      #{name                    => iodata()         % = 1
-       }.
--type hello_reply() ::
-      #{message                 => iodata()         % = 1
-       }.
--export_type(['hello_request'/0, 'hello_reply'/0]).
-
--spec encode_msg(hello_request() | hello_reply(),hello_request | hello_reply) -> binary().
+-spec encode_msg(map(),hello_request | hello_reply) -> binary().
 encode_msg(Msg, MsgName) ->
     encode_msg(Msg, MsgName, []).
 
 
--spec encode_msg(hello_request() | hello_reply(),hello_request | hello_reply, list()) -> binary().
+-spec encode_msg(map(),hello_request | hello_reply, list()) -> binary().
 encode_msg(Msg, MsgName, Opts) ->
     case proplists:get_bool(verify, Opts) of
       true -> verify_msg(Msg, MsgName, Opts);

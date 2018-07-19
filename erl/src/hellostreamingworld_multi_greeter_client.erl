@@ -3,7 +3,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
-%% this module was generated on 2018-07-17T07:53:07+00:00 and should not be modified manually
+%% this module was generated on 2018-07-19T03:09:15+00:00 and should not be modified manually
 
 -module(hellostreamingworld_multi_greeter_client).
 

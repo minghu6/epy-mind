@@ -6,10 +6,7 @@ An OTP application
 Compile Proto file
 -----
 
-    $ rebar3 shell
-    1> proto_tools:compile_all().
-    2> {ok, Connection} = grpc_client:connect(tcp, "localhost", 50051).
-    3> helloworld_client:'SayHello'(Connection, #{name => "World"}, []).
+    $ rebar3 grpc gen
 
 
 Build
@@ -44,6 +41,6 @@ Demo
 ```
 
 py as grpc server
-
+=====
       cd src
       python protobuf_server_test.py

@@ -3,14 +3,14 @@
 %% @end
 %%%-------------------------------------------------------------------
 
-%% this module was generated on 2018-07-17T07:53:07+00:00 and should not be modified manually
+%% this module was generated on 2018-07-19T03:09:16+00:00 and should not be modified manually
 
 -module(matrixop_matrix_op_client).
 
 -compile([nowarn_export_all]).
 -compile([export_all]).
 
--include("grpcbox.hrl").
+-include_lib("grpcbox/include/grpcbox.hrl").
 
 -define(SERVICE, 'matrixop.MatrixOp').
 -define(PROTO_MODULE, 'matrix_op_pb').

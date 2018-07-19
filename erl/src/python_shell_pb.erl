@@ -23,26 +23,13 @@
 -export([gpb_version_as_string/0, gpb_version_as_list/0]).
 
 
-%% enumerated types
 
--export_type([]).
-
-%% message types
--type eval_request() ::
-      #{exec                    => iodata(),        % = 1
-        eval                    => iodata()         % = 2
-       }.
--type string_value() ::
-      #{value                   => iodata()         % = 1
-       }.
--export_type(['eval_request'/0, 'string_value'/0]).
-
--spec encode_msg(eval_request() | string_value(),eval_request | string_value) -> binary().
+-spec encode_msg(map(),basic_elem | string_value | eval_request | string) -> binary().
 encode_msg(Msg, MsgName) ->
     encode_msg(Msg, MsgName, []).
 
 
--spec encode_msg(eval_request() | string_value(),eval_request | string_value, list()) -> binary().
+-spec encode_msg(map(),basic_elem | string_value | eval_request | string, list()) -> binary().
 encode_msg(Msg, MsgName, Opts) ->
     case proplists:get_bool(verify, Opts) of
       true -> verify_msg(Msg, MsgName, Opts);
@@ -50,11 +37,58 @@ encode_msg(Msg, MsgName, Opts) ->
     end,
     TrUserData = proplists:get_value(user_data, Opts),
     case MsgName of
+      basic_elem -> e_msg_basic_elem(Msg, TrUserData);
+      string_value -> e_msg_string_value(Msg, TrUserData);
       eval_request -> e_msg_eval_request(Msg, TrUserData);
-      string_value -> e_msg_string_value(Msg, TrUserData)
+      string -> e_msg_string(Msg, TrUserData)
     end.
 
 
+
+e_msg_basic_elem(Msg, TrUserData) ->
+    e_msg_basic_elem(Msg, <<>>, TrUserData).
+
+
+e_msg_basic_elem(#{} = M, Bin, TrUserData) ->
+    B1 = case M of
+	   #{value := F1} ->
+	       begin
+		 TrF1 = id(F1, TrUserData),
+		 case is_empty_string(TrF1) of
+		   true -> Bin;
+		   false -> e_type_string(TrF1, <<Bin/binary, 10>>)
+		 end
+	       end;
+	   _ -> Bin
+	 end,
+    case M of
+      #{type := F2} ->
+	  begin
+	    TrF2 = id(F2, TrUserData),
+	    case is_empty_string(TrF2) of
+	      true -> B1;
+	      false -> e_type_string(TrF2, <<B1/binary, 18>>)
+	    end
+	  end;
+      _ -> B1
+    end.
+
+e_msg_string_value(Msg, TrUserData) ->
+    e_msg_string_value(Msg, <<>>, TrUserData).
+
+
+e_msg_string_value(#{} = M, Bin, TrUserData) ->
+    case M of
+      #{value := F1} ->
+	  begin
+	    TrF1 = id(F1, TrUserData),
+	    case is_empty_string(TrF1) of
+	      true -> Bin;
+	      false -> e_type_string(TrF1, <<Bin/binary, 10>>)
+	    end
+	  end;
+      _ -> Bin
+    end.
 
 e_msg_eval_request(Msg, TrUserData) ->
     e_msg_eval_request(Msg, <<>>, TrUserData).
@@ -84,22 +118,7 @@ e_msg_eval_request(#{} = M, Bin, TrUserData) ->
       _ -> B1
     end.
 
-e_msg_string_value(Msg, TrUserData) ->
-    e_msg_string_value(Msg, <<>>, TrUserData).
-
-
-e_msg_string_value(#{} = M, Bin, TrUserData) ->
-    case M of
-      #{value := F1} ->
-	  begin
-	    TrF1 = id(F1, TrUserData),
-	    case is_empty_string(TrF1) of
-	      true -> Bin;
-	      false -> e_type_string(TrF1, <<Bin/binary, 10>>)
-	    end
-	  end;
-      _ -> Bin
-    end.
+e_msg_string(_Msg, _TrUserData) -> <<>>.
 
 e_type_string(S, Bin) ->
     Utf8 = unicode:characters_to_binary(S),
@@ -160,12 +179,260 @@ decode_msg_1_catch(Bin, MsgName, TrUserData) ->
 
 -endif.
 
+decode_msg_2_doit(basic_elem, Bin, TrUserData) ->
+    d_msg_basic_elem(Bin, TrUserData);
+decode_msg_2_doit(string_value, Bin, TrUserData) ->
+    d_msg_string_value(Bin, TrUserData);
 decode_msg_2_doit(eval_request, Bin, TrUserData) ->
     d_msg_eval_request(Bin, TrUserData);
-decode_msg_2_doit(string_value, Bin, TrUserData) ->
-    d_msg_string_value(Bin, TrUserData).
+decode_msg_2_doit(string, Bin, TrUserData) ->
+    d_msg_string(Bin, TrUserData).
 
 
+
+d_msg_basic_elem(Bin, TrUserData) ->
+    dfp_read_field_def_basic_elem(Bin, 0, 0,
+				  id(<<>>, TrUserData), id(<<>>, TrUserData),
+				  TrUserData).
+
+dfp_read_field_def_basic_elem(<<10, Rest/binary>>, Z1,
+			      Z2, F@_1, F@_2, TrUserData) ->
+    d_field_basic_elem_value(Rest, Z1, Z2, F@_1, F@_2,
+			     TrUserData);
+dfp_read_field_def_basic_elem(<<18, Rest/binary>>, Z1,
+			      Z2, F@_1, F@_2, TrUserData) ->
+    d_field_basic_elem_type(Rest, Z1, Z2, F@_1, F@_2,
+			    TrUserData);
+dfp_read_field_def_basic_elem(<<>>, 0, 0, F@_1, F@_2,
+			      _) ->
+    S1 = #{},
+    S2 = if F@_1 == '$undef' -> S1;
+	    true -> S1#{value => F@_1}
+	 end,
+    if F@_2 == '$undef' -> S2;
+       true -> S2#{type => F@_2}
+    end;
+dfp_read_field_def_basic_elem(Other, Z1, Z2, F@_1, F@_2,
+			      TrUserData) ->
+    dg_read_field_def_basic_elem(Other, Z1, Z2, F@_1, F@_2,
+				 TrUserData).
+
+dg_read_field_def_basic_elem(<<1:1, X:7, Rest/binary>>,
+			     N, Acc, F@_1, F@_2, TrUserData)
+    when N < 32 - 7 ->
+    dg_read_field_def_basic_elem(Rest, N + 7, X bsl N + Acc,
+				 F@_1, F@_2, TrUserData);
+dg_read_field_def_basic_elem(<<0:1, X:7, Rest/binary>>,
+			     N, Acc, F@_1, F@_2, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+      10 ->
+	  d_field_basic_elem_value(Rest, 0, 0, F@_1, F@_2,
+				   TrUserData);
+      18 ->
+	  d_field_basic_elem_type(Rest, 0, 0, F@_1, F@_2,
+				  TrUserData);
+      _ ->
+	  case Key band 7 of
+	    0 ->
+		skip_varint_basic_elem(Rest, 0, 0, F@_1, F@_2,
+				       TrUserData);
+	    1 ->
+		skip_64_basic_elem(Rest, 0, 0, F@_1, F@_2, TrUserData);
+	    2 ->
+		skip_length_delimited_basic_elem(Rest, 0, 0, F@_1, F@_2,
+						 TrUserData);
+	    3 ->
+		skip_group_basic_elem(Rest, Key bsr 3, 0, F@_1, F@_2,
+				      TrUserData);
+	    5 ->
+		skip_32_basic_elem(Rest, 0, 0, F@_1, F@_2, TrUserData)
+	  end
+    end;
+dg_read_field_def_basic_elem(<<>>, 0, 0, F@_1, F@_2,
+			     _) ->
+    S1 = #{},
+    S2 = if F@_1 == '$undef' -> S1;
+	    true -> S1#{value => F@_1}
+	 end,
+    if F@_2 == '$undef' -> S2;
+       true -> S2#{type => F@_2}
+    end.
+
+d_field_basic_elem_value(<<1:1, X:7, Rest/binary>>, N,
+			 Acc, F@_1, F@_2, TrUserData)
+    when N < 57 ->
+    d_field_basic_elem_value(Rest, N + 7, X bsl N + Acc,
+			     F@_1, F@_2, TrUserData);
+d_field_basic_elem_value(<<0:1, X:7, Rest/binary>>, N,
+			 Acc, _, F@_2, TrUserData) ->
+    {NewFValue, RestF} = begin
+			   Len = X bsl N + Acc,
+			   <<Bytes:Len/binary, Rest2/binary>> = Rest,
+			   {binary:copy(Bytes), Rest2}
+			 end,
+    dfp_read_field_def_basic_elem(RestF, 0, 0, NewFValue,
+				  F@_2, TrUserData).
+
+d_field_basic_elem_type(<<1:1, X:7, Rest/binary>>, N,
+			Acc, F@_1, F@_2, TrUserData)
+    when N < 57 ->
+    d_field_basic_elem_type(Rest, N + 7, X bsl N + Acc,
+			    F@_1, F@_2, TrUserData);
+d_field_basic_elem_type(<<0:1, X:7, Rest/binary>>, N,
+			Acc, F@_1, _, TrUserData) ->
+    {NewFValue, RestF} = begin
+			   Len = X bsl N + Acc,
+			   <<Bytes:Len/binary, Rest2/binary>> = Rest,
+			   {binary:copy(Bytes), Rest2}
+			 end,
+    dfp_read_field_def_basic_elem(RestF, 0, 0, F@_1,
+				  NewFValue, TrUserData).
+
+skip_varint_basic_elem(<<1:1, _:7, Rest/binary>>, Z1,
+		       Z2, F@_1, F@_2, TrUserData) ->
+    skip_varint_basic_elem(Rest, Z1, Z2, F@_1, F@_2,
+			   TrUserData);
+skip_varint_basic_elem(<<0:1, _:7, Rest/binary>>, Z1,
+		       Z2, F@_1, F@_2, TrUserData) ->
+    dfp_read_field_def_basic_elem(Rest, Z1, Z2, F@_1, F@_2,
+				  TrUserData).
+
+skip_length_delimited_basic_elem(<<1:1, X:7,
+				   Rest/binary>>,
+				 N, Acc, F@_1, F@_2, TrUserData)
+    when N < 57 ->
+    skip_length_delimited_basic_elem(Rest, N + 7,
+				     X bsl N + Acc, F@_1, F@_2, TrUserData);
+skip_length_delimited_basic_elem(<<0:1, X:7,
+				   Rest/binary>>,
+				 N, Acc, F@_1, F@_2, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_basic_elem(Rest2, 0, 0, F@_1, F@_2,
+				  TrUserData).
+
+skip_group_basic_elem(Bin, FNum, Z2, F@_1, F@_2,
+		      TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_basic_elem(Rest, 0, Z2, F@_1, F@_2,
+				  TrUserData).
+
+skip_32_basic_elem(<<_:32, Rest/binary>>, Z1, Z2, F@_1,
+		   F@_2, TrUserData) ->
+    dfp_read_field_def_basic_elem(Rest, Z1, Z2, F@_1, F@_2,
+				  TrUserData).
+
+skip_64_basic_elem(<<_:64, Rest/binary>>, Z1, Z2, F@_1,
+		   F@_2, TrUserData) ->
+    dfp_read_field_def_basic_elem(Rest, Z1, Z2, F@_1, F@_2,
+				  TrUserData).
+
+d_msg_string_value(Bin, TrUserData) ->
+    dfp_read_field_def_string_value(Bin, 0, 0,
+				    id(<<>>, TrUserData), TrUserData).
+
+dfp_read_field_def_string_value(<<10, Rest/binary>>, Z1,
+				Z2, F@_1, TrUserData) ->
+    d_field_string_value_value(Rest, Z1, Z2, F@_1,
+			       TrUserData);
+dfp_read_field_def_string_value(<<>>, 0, 0, F@_1, _) ->
+    S1 = #{},
+    if F@_1 == '$undef' -> S1;
+       true -> S1#{value => F@_1}
+    end;
+dfp_read_field_def_string_value(Other, Z1, Z2, F@_1,
+				TrUserData) ->
+    dg_read_field_def_string_value(Other, Z1, Z2, F@_1,
+				   TrUserData).
+
+dg_read_field_def_string_value(<<1:1, X:7,
+				 Rest/binary>>,
+			       N, Acc, F@_1, TrUserData)
+    when N < 32 - 7 ->
+    dg_read_field_def_string_value(Rest, N + 7,
+				   X bsl N + Acc, F@_1, TrUserData);
+dg_read_field_def_string_value(<<0:1, X:7,
+				 Rest/binary>>,
+			       N, Acc, F@_1, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+      10 ->
+	  d_field_string_value_value(Rest, 0, 0, F@_1,
+				     TrUserData);
+      _ ->
+	  case Key band 7 of
+	    0 ->
+		skip_varint_string_value(Rest, 0, 0, F@_1, TrUserData);
+	    1 -> skip_64_string_value(Rest, 0, 0, F@_1, TrUserData);
+	    2 ->
+		skip_length_delimited_string_value(Rest, 0, 0, F@_1,
+						   TrUserData);
+	    3 ->
+		skip_group_string_value(Rest, Key bsr 3, 0, F@_1,
+					TrUserData);
+	    5 -> skip_32_string_value(Rest, 0, 0, F@_1, TrUserData)
+	  end
+    end;
+dg_read_field_def_string_value(<<>>, 0, 0, F@_1, _) ->
+    S1 = #{},
+    if F@_1 == '$undef' -> S1;
+       true -> S1#{value => F@_1}
+    end.
+
+d_field_string_value_value(<<1:1, X:7, Rest/binary>>, N,
+			   Acc, F@_1, TrUserData)
+    when N < 57 ->
+    d_field_string_value_value(Rest, N + 7, X bsl N + Acc,
+			       F@_1, TrUserData);
+d_field_string_value_value(<<0:1, X:7, Rest/binary>>, N,
+			   Acc, _, TrUserData) ->
+    {NewFValue, RestF} = begin
+			   Len = X bsl N + Acc,
+			   <<Bytes:Len/binary, Rest2/binary>> = Rest,
+			   {binary:copy(Bytes), Rest2}
+			 end,
+    dfp_read_field_def_string_value(RestF, 0, 0, NewFValue,
+				    TrUserData).
+
+skip_varint_string_value(<<1:1, _:7, Rest/binary>>, Z1,
+			 Z2, F@_1, TrUserData) ->
+    skip_varint_string_value(Rest, Z1, Z2, F@_1,
+			     TrUserData);
+skip_varint_string_value(<<0:1, _:7, Rest/binary>>, Z1,
+			 Z2, F@_1, TrUserData) ->
+    dfp_read_field_def_string_value(Rest, Z1, Z2, F@_1,
+				    TrUserData).
+
+skip_length_delimited_string_value(<<1:1, X:7,
+				     Rest/binary>>,
+				   N, Acc, F@_1, TrUserData)
+    when N < 57 ->
+    skip_length_delimited_string_value(Rest, N + 7,
+				       X bsl N + Acc, F@_1, TrUserData);
+skip_length_delimited_string_value(<<0:1, X:7,
+				     Rest/binary>>,
+				   N, Acc, F@_1, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_string_value(Rest2, 0, 0, F@_1,
+				    TrUserData).
+
+skip_group_string_value(Bin, FNum, Z2, F@_1,
+			TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_string_value(Rest, 0, Z2, F@_1,
+				    TrUserData).
+
+skip_32_string_value(<<_:32, Rest/binary>>, Z1, Z2,
+		     F@_1, TrUserData) ->
+    dfp_read_field_def_string_value(Rest, Z1, Z2, F@_1,
+				    TrUserData).
+
+skip_64_string_value(<<_:64, Rest/binary>>, Z1, Z2,
+		     F@_1, TrUserData) ->
+    dfp_read_field_def_string_value(Rest, Z1, Z2, F@_1,
+				    TrUserData).
 
 d_msg_eval_request(Bin, TrUserData) ->
     dfp_read_field_def_eval_request(Bin, 0, 0,
@@ -308,111 +575,60 @@ skip_64_eval_request(<<_:64, Rest/binary>>, Z1, Z2,
     dfp_read_field_def_eval_request(Rest, Z1, Z2, F@_1,
 				    F@_2, TrUserData).
 
-d_msg_string_value(Bin, TrUserData) ->
-    dfp_read_field_def_string_value(Bin, 0, 0,
-				    id(<<>>, TrUserData), TrUserData).
+d_msg_string(Bin, TrUserData) ->
+    dfp_read_field_def_string(Bin, 0, 0, TrUserData).
 
-dfp_read_field_def_string_value(<<10, Rest/binary>>, Z1,
-				Z2, F@_1, TrUserData) ->
-    d_field_string_value_value(Rest, Z1, Z2, F@_1,
-			       TrUserData);
-dfp_read_field_def_string_value(<<>>, 0, 0, F@_1, _) ->
-    S1 = #{},
-    if F@_1 == '$undef' -> S1;
-       true -> S1#{value => F@_1}
-    end;
-dfp_read_field_def_string_value(Other, Z1, Z2, F@_1,
-				TrUserData) ->
-    dg_read_field_def_string_value(Other, Z1, Z2, F@_1,
-				   TrUserData).
+dfp_read_field_def_string(<<>>, 0, 0, _) -> #{};
+dfp_read_field_def_string(Other, Z1, Z2, TrUserData) ->
+    dg_read_field_def_string(Other, Z1, Z2, TrUserData).
 
-dg_read_field_def_string_value(<<1:1, X:7,
-				 Rest/binary>>,
-			       N, Acc, F@_1, TrUserData)
+dg_read_field_def_string(<<1:1, X:7, Rest/binary>>, N,
+			 Acc, TrUserData)
     when N < 32 - 7 ->
-    dg_read_field_def_string_value(Rest, N + 7,
-				   X bsl N + Acc, F@_1, TrUserData);
-dg_read_field_def_string_value(<<0:1, X:7,
-				 Rest/binary>>,
-			       N, Acc, F@_1, TrUserData) ->
-    Key = X bsl N + Acc,
-    case Key of
-      10 ->
-	  d_field_string_value_value(Rest, 0, 0, F@_1,
-				     TrUserData);
-      _ ->
-	  case Key band 7 of
-	    0 ->
-		skip_varint_string_value(Rest, 0, 0, F@_1, TrUserData);
-	    1 -> skip_64_string_value(Rest, 0, 0, F@_1, TrUserData);
-	    2 ->
-		skip_length_delimited_string_value(Rest, 0, 0, F@_1,
-						   TrUserData);
-	    3 ->
-		skip_group_string_value(Rest, Key bsr 3, 0, F@_1,
-					TrUserData);
-	    5 -> skip_32_string_value(Rest, 0, 0, F@_1, TrUserData)
-	  end
-    end;
-dg_read_field_def_string_value(<<>>, 0, 0, F@_1, _) ->
-    S1 = #{},
-    if F@_1 == '$undef' -> S1;
-       true -> S1#{value => F@_1}
-    end.
-
-d_field_string_value_value(<<1:1, X:7, Rest/binary>>, N,
-			   Acc, F@_1, TrUserData)
-    when N < 57 ->
-    d_field_string_value_value(Rest, N + 7, X bsl N + Acc,
-			       F@_1, TrUserData);
-d_field_string_value_value(<<0:1, X:7, Rest/binary>>, N,
-			   Acc, _, TrUserData) ->
-    {NewFValue, RestF} = begin
-			   Len = X bsl N + Acc,
-			   <<Bytes:Len/binary, Rest2/binary>> = Rest,
-			   {binary:copy(Bytes), Rest2}
-			 end,
-    dfp_read_field_def_string_value(RestF, 0, 0, NewFValue,
-				    TrUserData).
-
-skip_varint_string_value(<<1:1, _:7, Rest/binary>>, Z1,
-			 Z2, F@_1, TrUserData) ->
-    skip_varint_string_value(Rest, Z1, Z2, F@_1,
+    dg_read_field_def_string(Rest, N + 7, X bsl N + Acc,
 			     TrUserData);
-skip_varint_string_value(<<0:1, _:7, Rest/binary>>, Z1,
-			 Z2, F@_1, TrUserData) ->
-    dfp_read_field_def_string_value(Rest, Z1, Z2, F@_1,
-				    TrUserData).
+dg_read_field_def_string(<<0:1, X:7, Rest/binary>>, N,
+			 Acc, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key band 7 of
+      0 -> skip_varint_string(Rest, 0, 0, TrUserData);
+      1 -> skip_64_string(Rest, 0, 0, TrUserData);
+      2 ->
+	  skip_length_delimited_string(Rest, 0, 0, TrUserData);
+      3 -> skip_group_string(Rest, Key bsr 3, 0, TrUserData);
+      5 -> skip_32_string(Rest, 0, 0, TrUserData)
+    end;
+dg_read_field_def_string(<<>>, 0, 0, _) -> #{}.
 
-skip_length_delimited_string_value(<<1:1, X:7,
-				     Rest/binary>>,
-				   N, Acc, F@_1, TrUserData)
+skip_varint_string(<<1:1, _:7, Rest/binary>>, Z1, Z2,
+		   TrUserData) ->
+    skip_varint_string(Rest, Z1, Z2, TrUserData);
+skip_varint_string(<<0:1, _:7, Rest/binary>>, Z1, Z2,
+		   TrUserData) ->
+    dfp_read_field_def_string(Rest, Z1, Z2, TrUserData).
+
+skip_length_delimited_string(<<1:1, X:7, Rest/binary>>,
+			     N, Acc, TrUserData)
     when N < 57 ->
-    skip_length_delimited_string_value(Rest, N + 7,
-				       X bsl N + Acc, F@_1, TrUserData);
-skip_length_delimited_string_value(<<0:1, X:7,
-				     Rest/binary>>,
-				   N, Acc, F@_1, TrUserData) ->
+    skip_length_delimited_string(Rest, N + 7, X bsl N + Acc,
+				 TrUserData);
+skip_length_delimited_string(<<0:1, X:7, Rest/binary>>,
+			     N, Acc, TrUserData) ->
     Length = X bsl N + Acc,
     <<_:Length/binary, Rest2/binary>> = Rest,
-    dfp_read_field_def_string_value(Rest2, 0, 0, F@_1,
-				    TrUserData).
+    dfp_read_field_def_string(Rest2, 0, 0, TrUserData).
 
-skip_group_string_value(Bin, FNum, Z2, F@_1,
-			TrUserData) ->
+skip_group_string(Bin, FNum, Z2, TrUserData) ->
     {_, Rest} = read_group(Bin, FNum),
-    dfp_read_field_def_string_value(Rest, 0, Z2, F@_1,
-				    TrUserData).
+    dfp_read_field_def_string(Rest, 0, Z2, TrUserData).
 
-skip_32_string_value(<<_:32, Rest/binary>>, Z1, Z2,
-		     F@_1, TrUserData) ->
-    dfp_read_field_def_string_value(Rest, Z1, Z2, F@_1,
-				    TrUserData).
+skip_32_string(<<_:32, Rest/binary>>, Z1, Z2,
+	       TrUserData) ->
+    dfp_read_field_def_string(Rest, Z1, Z2, TrUserData).
 
-skip_64_string_value(<<_:64, Rest/binary>>, Z1, Z2,
-		     F@_1, TrUserData) ->
-    dfp_read_field_def_string_value(Rest, Z1, Z2, F@_1,
-				    TrUserData).
+skip_64_string(<<_:64, Rest/binary>>, Z1, Z2,
+	       TrUserData) ->
+    dfp_read_field_def_string(Rest, Z1, Z2, TrUserData).
 
 read_group(Bin, FieldNum) ->
     {NumBytes, EndTagLen} = read_gr_b(Bin, 0, 0, 0, 0, FieldNum),
@@ -478,10 +694,34 @@ merge_msgs(Prev, New, MsgName) ->
 merge_msgs(Prev, New, MsgName, Opts) ->
     TrUserData = proplists:get_value(user_data, Opts),
     case MsgName of
+      basic_elem ->
+	  merge_msg_basic_elem(Prev, New, TrUserData);
+      string_value ->
+	  merge_msg_string_value(Prev, New, TrUserData);
       eval_request ->
 	  merge_msg_eval_request(Prev, New, TrUserData);
-      string_value ->
-	  merge_msg_string_value(Prev, New, TrUserData)
+      string -> merge_msg_string(Prev, New, TrUserData)
+    end.
+
+merge_msg_basic_elem(PMsg, NMsg, _) ->
+    S1 = #{},
+    S2 = case {PMsg, NMsg} of
+	   {_, #{value := NFvalue}} -> S1#{value => NFvalue};
+	   {#{value := PFvalue}, _} -> S1#{value => PFvalue};
+	   _ -> S1
+	 end,
+    case {PMsg, NMsg} of
+      {_, #{type := NFtype}} -> S2#{type => NFtype};
+      {#{type := PFtype}, _} -> S2#{type => PFtype};
+      _ -> S2
+    end.
+
+merge_msg_string_value(PMsg, NMsg, _) ->
+    S1 = #{},
+    case {PMsg, NMsg} of
+      {_, #{value := NFvalue}} -> S1#{value => NFvalue};
+      {#{value := PFvalue}, _} -> S1#{value => PFvalue};
+      _ -> S1
     end.
 
 merge_msg_eval_request(PMsg, NMsg, _) ->
@@ -497,13 +737,7 @@ merge_msg_eval_request(PMsg, NMsg, _) ->
       _ -> S2
     end.
 
-merge_msg_string_value(PMsg, NMsg, _) ->
-    S1 = #{},
-    case {PMsg, NMsg} of
-      {_, #{value := NFvalue}} -> S1#{value => NFvalue};
-      {#{value := PFvalue}, _} -> S1#{value => PFvalue};
-      _ -> S1
-    end.
+merge_msg_string(_Prev, New, _TrUserData) -> New.
 
 
 verify_msg(Msg, MsgName) ->
@@ -512,13 +746,60 @@ verify_msg(Msg, MsgName) ->
 verify_msg(Msg, MsgName, Opts) ->
     TrUserData = proplists:get_value(user_data, Opts),
     case MsgName of
-      eval_request ->
-	  v_msg_eval_request(Msg, [eval_request], TrUserData);
+      basic_elem ->
+	  v_msg_basic_elem(Msg, [basic_elem], TrUserData);
       string_value ->
 	  v_msg_string_value(Msg, [string_value], TrUserData);
+      eval_request ->
+	  v_msg_eval_request(Msg, [eval_request], TrUserData);
+      string -> v_msg_string(Msg, [string], TrUserData);
       _ -> mk_type_error(not_a_known_message, Msg, [])
     end.
 
+
+-dialyzer({nowarn_function,v_msg_basic_elem/3}).
+v_msg_basic_elem(#{} = M, Path, _) ->
+    case M of
+      #{value := F1} -> v_type_string(F1, [value | Path]);
+      _ -> ok
+    end,
+    case M of
+      #{type := F2} -> v_type_string(F2, [type | Path]);
+      _ -> ok
+    end,
+    lists:foreach(fun (value) -> ok;
+		      (type) -> ok;
+		      (OtherKey) ->
+			  mk_type_error({extraneous_key, OtherKey}, M, Path)
+		  end,
+		  maps:keys(M)),
+    ok;
+v_msg_basic_elem(M, Path, _TrUserData) when is_map(M) ->
+    mk_type_error({missing_fields, [] -- maps:keys(M),
+		   basic_elem},
+		  M, Path);
+v_msg_basic_elem(X, Path, _TrUserData) ->
+    mk_type_error({expected_msg, basic_elem}, X, Path).
+
+-dialyzer({nowarn_function,v_msg_string_value/3}).
+v_msg_string_value(#{} = M, Path, _) ->
+    case M of
+      #{value := F1} -> v_type_string(F1, [value | Path]);
+      _ -> ok
+    end,
+    lists:foreach(fun (value) -> ok;
+		      (OtherKey) ->
+			  mk_type_error({extraneous_key, OtherKey}, M, Path)
+		  end,
+		  maps:keys(M)),
+    ok;
+v_msg_string_value(M, Path, _TrUserData)
+    when is_map(M) ->
+    mk_type_error({missing_fields, [] -- maps:keys(M),
+		   string_value},
+		  M, Path);
+v_msg_string_value(X, Path, _TrUserData) ->
+    mk_type_error({expected_msg, string_value}, X, Path).
 
 -dialyzer({nowarn_function,v_msg_eval_request/3}).
 v_msg_eval_request(#{} = M, Path, _) ->
@@ -545,25 +826,19 @@ v_msg_eval_request(M, Path, _TrUserData)
 v_msg_eval_request(X, Path, _TrUserData) ->
     mk_type_error({expected_msg, eval_request}, X, Path).
 
--dialyzer({nowarn_function,v_msg_string_value/3}).
-v_msg_string_value(#{} = M, Path, _) ->
-    case M of
-      #{value := F1} -> v_type_string(F1, [value | Path]);
-      _ -> ok
-    end,
-    lists:foreach(fun (value) -> ok;
-		      (OtherKey) ->
+-dialyzer({nowarn_function,v_msg_string/3}).
+v_msg_string(#{} = M, Path, _) ->
+    lists:foreach(fun (OtherKey) ->
 			  mk_type_error({extraneous_key, OtherKey}, M, Path)
 		  end,
 		  maps:keys(M)),
     ok;
-v_msg_string_value(M, Path, _TrUserData)
-    when is_map(M) ->
+v_msg_string(M, Path, _TrUserData) when is_map(M) ->
     mk_type_error({missing_fields, [] -- maps:keys(M),
-		   string_value},
+		   string},
 		  M, Path);
-v_msg_string_value(X, Path, _TrUserData) ->
-    mk_type_error({expected_msg, string_value}, X, Path).
+v_msg_string(X, Path, _TrUserData) ->
+    mk_type_error({expected_msg, string}, X, Path).
 
 -dialyzer({nowarn_function,v_type_string/2}).
 v_type_string(S, Path) when is_list(S); is_binary(S) ->
@@ -598,24 +873,31 @@ id(X, _TrUserData) -> X.
 
 
 get_msg_defs() ->
-    [{{msg, eval_request},
+    [{{msg, basic_elem},
+      [#{name => value, fnum => 1, rnum => 2, type => string,
+	 occurrence => optional, opts => []},
+       #{name => type, fnum => 2, rnum => 3, type => string,
+	 occurrence => optional, opts => []}]},
+     {{msg, string_value},
+      [#{name => value, fnum => 1, rnum => 2, type => string,
+	 occurrence => optional, opts => []}]},
+     {{msg, eval_request},
       [#{name => exec, fnum => 1, rnum => 2, type => string,
 	 occurrence => optional, opts => []},
        #{name => eval, fnum => 2, rnum => 3, type => string,
 	 occurrence => optional, opts => []}]},
-     {{msg, string_value},
-      [#{name => value, fnum => 1, rnum => 2, type => string,
-	 occurrence => optional, opts => []}]}].
+     {{msg, string}, []}].
 
 
-get_msg_names() -> [eval_request, string_value].
+get_msg_names() ->
+    [basic_elem, string_value, eval_request, string].
 
 
 get_group_names() -> [].
 
 
 get_msg_or_group_names() ->
-    [eval_request, string_value].
+    [basic_elem, string_value, eval_request, string].
 
 
 get_enum_names() -> [].
@@ -633,14 +915,20 @@ fetch_enum_def(EnumName) ->
     erlang:error({no_such_enum, EnumName}).
 
 
+find_msg_def(basic_elem) ->
+    [#{name => value, fnum => 1, rnum => 2, type => string,
+       occurrence => optional, opts => []},
+     #{name => type, fnum => 2, rnum => 3, type => string,
+       occurrence => optional, opts => []}];
+find_msg_def(string_value) ->
+    [#{name => value, fnum => 1, rnum => 2, type => string,
+       occurrence => optional, opts => []}];
 find_msg_def(eval_request) ->
     [#{name => exec, fnum => 1, rnum => 2, type => string,
        occurrence => optional, opts => []},
      #{name => eval, fnum => 2, rnum => 3, type => string,
        occurrence => optional, opts => []}];
-find_msg_def(string_value) ->
-    [#{name => value, fnum => 1, rnum => 2, type => string,
-       occurrence => optional, opts => []}];
+find_msg_def(string) -> [];
 find_msg_def(_) -> error.
 
 

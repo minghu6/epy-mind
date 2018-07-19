@@ -23,35 +23,13 @@
 -export([gpb_version_as_string/0, gpb_version_as_list/0]).
 
 
-%% enumerated types
 
--export_type([]).
-
-%% message types
--type matrix() ::
-      #{col                     => integer(),       % = 1, 32 bits
-        row                     => integer(),       % = 2, 32 bits
-        e                       => [integer()]      % = 3, 32 bits
-       }.
--type operator() ::
-      #{value                   => iodata(),        % = 1
-        factor_num              => integer()        % = 2, 32 bits
-       }.
--type matrix_op_request() ::
-      #{matrixs                 => [matrix()],      % = 1
-        op                      => operator()       % = 2
-       }.
--type matrix_list() ::
-      #{matrixs                 => [matrix()]       % = 1
-       }.
--export_type(['matrix'/0, 'operator'/0, 'matrix_op_request'/0, 'matrix_list'/0]).
-
--spec encode_msg(matrix() | operator() | matrix_op_request() | matrix_list(),matrix | operator | matrix_op_request | matrix_list) -> binary().
+-spec encode_msg(map(),matrix | operator | matrix_op_request | matrix_list) -> binary().
 encode_msg(Msg, MsgName) ->
     encode_msg(Msg, MsgName, []).
 
 
--spec encode_msg(matrix() | operator() | matrix_op_request() | matrix_list(),matrix | operator | matrix_op_request | matrix_list, list()) -> binary().
+-spec encode_msg(map(),matrix | operator | matrix_op_request | matrix_list, list()) -> binary().
 encode_msg(Msg, MsgName, Opts) ->
     case proplists:get_bool(verify, Opts) of
       true -> verify_msg(Msg, MsgName, Opts);

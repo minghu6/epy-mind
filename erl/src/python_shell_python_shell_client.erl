@@ -3,14 +3,14 @@
 %% @end
 %%%-------------------------------------------------------------------
 
-%% this module was generated on 2018-07-17T07:53:07+00:00 and should not be modified manually
+%% this module was generated on 2018-07-19T03:09:16+00:00 and should not be modified manually
 
 -module(python_shell_python_shell_client).
 
 -compile([nowarn_export_all]).
 -compile([export_all]).
 
--include("grpcbox.hrl").
+-include_lib("grpcbox/include/grpcbox.hrl").
 
 -define(SERVICE, 'python_shell.PythonShell').
 -define(PROTO_MODULE, 'python_shell_pb').
